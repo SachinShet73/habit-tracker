@@ -34,6 +34,14 @@ export const initializeHabits = async (req, res) => {
       }]
     ]);
 
+    // Create initial monthly view array for current month
+    const today = new Date();
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const monthlyView = Array.from({ length: daysInMonth }, (_, index) => ({
+      date: new Date(today.getFullYear(), today.getMonth(), index + 1),
+      completed: false
+    }));
+
     const habit = await Habit.create({
       userId: req.user._id,
       categories: defaultCategories,
@@ -41,7 +49,8 @@ export const initializeHabits = async (req, res) => {
         currentStreak: 0,
         longestStreak: 0,
         lastUpdate: new Date()
-      }
+      },
+      monthlyView
     });
 
     res.status(201).json(habit);
@@ -112,15 +121,18 @@ export const updateHabitStatus = async (req, res) => {
 
       // Update monthly view
       const today = new Date();
-      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-      const dayOfMonth = today.getDate() - 1;
+      const todayIndex = today.getDate() - 1;
 
       // Ensure monthlyView array is initialized for current month
-      if (!habit.monthlyView.length || habit.monthlyView[0].date < monthStart) {
-        habit.monthlyView = Array(31).fill(false);
+      if (!habit.monthlyView[todayIndex]) {
+        const currentDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        habit.monthlyView[todayIndex] = {
+          date: currentDate,
+          completed: true
+        };
+      } else {
+        habit.monthlyView[todayIndex].completed = true;
       }
-
-      habit.monthlyView[dayOfMonth] = true;
     }
 
     // Save all changes
@@ -173,6 +185,37 @@ export const addHabit = async (req, res) => {
   }
 };
 
+// @desc    Delete habit
+// @route   DELETE /api/habits/category/:categoryId/habit/:habitId
+// @access  Private
+export const deleteHabit = async (req, res) => {
+  try {
+    const { categoryId, habitId } = req.params;
+    const habit = await Habit.findOne({ userId: req.user._id });
+
+    if (!habit) {
+      return res.status(404).json({ message: 'Habits not found' });
+    }
+
+    const category = habit.categories.get(categoryId);
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+
+    // Remove habit at specified index
+    category.habits.splice(parseInt(habitId), 1);
+
+    // Update category in the Map
+    habit.categories.set(categoryId, category);
+
+    const updatedHabit = await habit.save();
+    res.json(updatedHabit);
+  } catch (error) {
+    console.error('Delete habit error:', error);
+    res.status(400).json({ message: 'Error deleting habit', error: error.message });
+  }
+};
+
 // @desc    Add new category
 // @route   POST /api/habits/category
 // @access  Private
@@ -209,37 +252,6 @@ export const addCategory = async (req, res) => {
   } catch (error) {
     console.error('Add category error:', error);
     res.status(400).json({ message: 'Error adding category', error: error.message });
-  }
-};
-
-// @desc    Delete habit
-// @route   DELETE /api/habits/category/:categoryId/habit/:habitId
-// @access  Private
-export const deleteHabit = async (req, res) => {
-  try {
-    const { categoryId, habitId } = req.params;
-    const habit = await Habit.findOne({ userId: req.user._id });
-
-    if (!habit) {
-      return res.status(404).json({ message: 'Habits not found' });
-    }
-
-    const category = habit.categories.get(categoryId);
-    if (!category) {
-      return res.status(404).json({ message: 'Category not found' });
-    }
-
-    // Remove habit at specified index
-    category.habits.splice(parseInt(habitId), 1);
-
-    // Update category in the Map
-    habit.categories.set(categoryId, category);
-
-    const updatedHabit = await habit.save();
-    res.json(updatedHabit);
-  } catch (error) {
-    console.error('Delete habit error:', error);
-    res.status(400).json({ message: 'Error deleting habit', error: error.message });
   }
 };
 

@@ -25,8 +25,8 @@ const habitSchema = new mongoose.Schema({
     lastUpdate: Date
   },
   monthlyView: [{
-    date: Date,
-    completed: Boolean
+    date: { type: Date },
+    completed: { type: Boolean, default: false }
   }]
 }, {
   timestamps: true
