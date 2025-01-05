@@ -39,6 +39,9 @@ export default function AnalyticsPage() {
               <Link href="/journal" className="text-gray-500 hover:text-gray-700">
                 Journal
               </Link>
+              <Link href="/history" className="text-gray-500 hover:text-gray-700">
+                History
+              </Link>
             </div>
             <span className="text-gray-700">Welcome, {user.name}</span>
           </div>

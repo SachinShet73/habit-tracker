@@ -8,7 +8,9 @@ import {
   addHabit,
   addCategory,
   deleteHabit,
-  deleteCategory
+  deleteCategory,
+  getHabitHistory,
+  getHabitAnalytics
 } from '../controllers/habitController.js';
 
 const router = express.Router();
@@ -16,17 +18,17 @@ const router = express.Router();
 // Protect all routes
 router.use(protect);
 
-// Habit routes
+// Existing routes
 router.post('/initialize', initializeHabits);
 router.get('/', getHabits);
-
-// Category routes
 router.post('/category', addCategory);
 router.delete('/category/:categoryId', deleteCategory);
-
-// Habit management routes
 router.post('/category/:categoryId', addHabit);
 router.put('/category/:categoryId/habit/:habitId', updateHabitStatus);
 router.delete('/category/:categoryId/habit/:habitId', deleteHabit);
+
+// New history and analytics routes
+router.get('/history', getHabitHistory);
+router.get('/analytics', getHabitAnalytics);
 
 export default router;

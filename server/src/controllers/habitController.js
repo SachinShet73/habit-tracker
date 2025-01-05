@@ -76,6 +76,93 @@ export const getHabits = async (req, res) => {
   }
 };
 
+// Add to server/src/controllers/habitController.js
+
+// @desc    Get habit history
+// @route   GET /api/habits/history
+// @access  Private
+export const getHabitHistory = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    // Find the user's habits document
+    const habits = await Habit.findOne({ userId: req.user._id });
+    
+    if (!habits) {
+      return res.json([]);
+    }
+
+    // Create daily entries for the date range
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const dailyEntries = [];
+
+    for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
+      dailyEntries.push({
+        date: new Date(d),
+        categories: habits.categories,
+        streakData: {
+          currentStreak: habits.streakData.currentStreak,
+          longestStreak: habits.streakData.longestStreak
+        }
+      });
+    }
+
+    res.json(dailyEntries);
+  } catch (error) {
+    console.error('Get habit history error:', error);
+    res.status(400).json({ message: 'Error fetching habit history', error: error.message });
+  }
+};
+
+// @desc    Get habit analytics
+// @route   GET /api/habits/analytics
+// @access  Private
+export const getHabitAnalytics = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const habits = await Habit.find({
+      userId: req.user._id,
+      createdAt: {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      }
+    });
+
+    // Calculate analytics
+    const analytics = {
+      categoryStats: [],
+      dailyStats: [],
+      habitStats: []
+    };
+
+    // Process habits data to generate statistics
+    // This is a simplified version - you can expand based on your needs
+    habits.forEach(habit => {
+      // Process categories
+      Object.entries(habit.categories).forEach(([categoryId, category]) => {
+        const completedHabits = category.habits.filter(h => h.completed).length;
+        const totalHabits = category.habits.length;
+        
+        analytics.categoryStats.push({
+          category: category.title,
+          completionRate: (completedHabits / totalHabits) * 100,
+          totalHabits,
+          streakData: {
+            bestStreak: habit.streakData.longestStreak,
+            averageStreak: habit.streakData.currentStreak
+          }
+        });
+      });
+    });
+
+    res.json(analytics);
+  } catch (error) {
+    console.error('Get habit analytics error:', error);
+    res.status(400).json({ message: 'Error fetching habit analytics', error: error.message });
+  }
+};
+
 // @desc    Update habit completion status
 // @route   PUT /api/habits/category/:categoryId/habit/:habitId
 // @access  Private
