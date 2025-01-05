@@ -69,6 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       localStorage.setItem('token', data.token);
+      console.log('Your token:', data.token);  // Add this line
       setUser({
         _id: data._id,
         name: data.name,
@@ -84,6 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (name: string, email: string, password: string) => {
     try {
+      // Register user
       const response = await fetch('http://localhost:5000/api/auth/register', {
         method: 'POST',
         headers: {
@@ -105,10 +107,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: data.email,
       });
 
+      // Initialize habits for new user
+      try {
+        const habitsResponse = await fetch('http://localhost:5000/api/habits/initialize', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${data.token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!habitsResponse.ok) {
+          console.error('Failed to initialize habits');
+        }
+      } catch (error) {
+        console.error('Error initializing habits:', error);
+      }
+
       router.push('/dashboard');
     } catch (error) {
       console.error('Registration error:', error);
-      alert(error instanceof Error ? error.message : 'Registration failed');
+      throw error;
     }
   };
 

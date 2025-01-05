@@ -23,10 +23,6 @@ const userSchema = new mongoose.Schema({
       reminderTime: { type: String, default: '09:00' },
       email: { type: Boolean, default: true }
     },
-    theme: {
-      darkMode: { type: Boolean, default: false },
-      colorScheme: { type: String, default: 'blue' }
-    }
   }
 }, {
   timestamps: true

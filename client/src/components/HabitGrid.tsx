@@ -45,6 +45,10 @@ export default function HabitGrid() {
   const fetchHabits = async () => {
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
       const response = await fetch('http://localhost:5000/api/habits', {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -52,6 +56,29 @@ export default function HabitGrid() {
       });
 
       if (!response.ok) {
+        // If no habits found, try to initialize them
+        if (response.status === 404) {
+          const initResponse = await fetch('http://localhost:5000/api/habits/initialize', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (initResponse.ok) {
+            // Fetch habits again after initialization
+            const newResponse = await fetch('http://localhost:5000/api/habits', {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            });
+            if (newResponse.ok) {
+              const data = await newResponse.json();
+              setHabitData(data);
+              return;
+            }
+          }
+        }
         throw new Error('Failed to fetch habits');
       }
 

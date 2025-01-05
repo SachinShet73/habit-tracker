@@ -367,40 +367,81 @@ export const deleteCategory = async (req, res) => {
   }
 };
 
-// Utility function to reset daily habits (called by cron job)
 export const resetDailyHabits = async () => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
+    console.log('Starting habit reset process...');
+    
     const habits = await Habit.find({});
+    console.log(`Found ${habits.length} habits to process`);
+    
     const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start of today
     
     for (const habit of habits) {
-      let lastUpdate = habit.streakData.lastUpdate;
-      let resetNeeded = false;
+      console.log(`Processing habit for user: ${habit.userId}`);
+      
+      let modified = false;
+      const updatedCategories = new Map(habit.categories);
 
-      // If lastUpdate is more than 24 hours ago
-      if ((today - lastUpdate) / (1000 * 60 * 60 * 24) >= 1) {
-        resetNeeded = true;
+      // Process each category
+      for (const [categoryId, category] of updatedCategories.entries()) {
+        console.log(`Processing category: ${categoryId}`);
+        
+        // Reset today's habits
+        const updatedHabits = category.habits.map(h => {
+          const completionDate = h.completedAt ? new Date(h.completedAt) : null;
+          if (completionDate) {
+            completionDate.setHours(0, 0, 0, 0);
+          }
+          
+          // Only reset if completed today
+          if (h.completed && completionDate?.getTime() === today.getTime()) {
+            modified = true;
+            return {
+              ...h,
+              completed: false,
+              completedAt: null
+            };
+          }
+          return h;
+        });
 
-        // If more than 1 day has passed, reset streak
-        if ((today - lastUpdate) / (1000 * 60 * 60 * 24) > 1) {
-          habit.streakData.currentStreak = 0;
-        }
+        // Update category with reset habits
+        updatedCategories.set(categoryId, {
+          ...category,
+          habits: updatedHabits
+        });
+      }
 
-        // Reset all habits to incomplete
-        for (const [key, category] of habit.categories.entries()) {
-          category.habits = category.habits.map(h => ({
-            ...h,
-            completed: false,
-            completedAt: null
-          }));
-          habit.categories.set(key, category);
-        }
-
-        habit.streakData.lastUpdate = today;
-        await habit.save();
+      if (modified) {
+        console.log(`Updating habit document for user: ${habit.userId}`);
+        await Habit.updateOne(
+          { _id: habit._id },
+          { 
+            $set: { 
+              categories: updatedCategories,
+              'streakData.lastUpdate': today
+            } 
+          },
+          { session }
+        );
+        console.log(`Successfully reset habits for user: ${habit.userId}`);
+      } else {
+        console.log(`No changes needed for user: ${habit.userId}`);
       }
     }
+
+    await session.commitTransaction();
+    console.log('Reset completed successfully');
+    return { success: true, message: 'Habits reset successfully' };
   } catch (error) {
+    await session.abortTransaction();
     console.error('Reset daily habits error:', error);
+    throw error;
+  } finally {
+    session.endSession();
   }
 };

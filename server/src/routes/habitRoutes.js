@@ -10,7 +10,8 @@ import {
   deleteHabit,
   deleteCategory,
   getHabitHistory,
-  getHabitAnalytics
+  getHabitAnalytics,
+  resetDailyHabits
 } from '../controllers/habitController.js';
 
 const router = express.Router();
@@ -26,9 +27,17 @@ router.delete('/category/:categoryId', deleteCategory);
 router.post('/category/:categoryId', addHabit);
 router.put('/category/:categoryId/habit/:habitId', updateHabitStatus);
 router.delete('/category/:categoryId/habit/:habitId', deleteHabit);
-
-// New history and analytics routes
 router.get('/history', getHabitHistory);
 router.get('/analytics', getHabitAnalytics);
+
+// Add manual reset endpoint for testing
+router.post('/reset', async (req, res) => {
+  try {
+    const result = await resetDailyHabits();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: 'Error resetting habits', error: error.message });
+  }
+});
 
 export default router;

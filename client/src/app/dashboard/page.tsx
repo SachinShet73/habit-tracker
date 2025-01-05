@@ -45,8 +45,8 @@ export default function Dashboard() {
               <Link href="/journal" className="text-gray-500 hover:text-gray-700">
                 Journal
               </Link>
-              <Link href="/history" className="text-gray-500 hover:text-gray-700">
-                History
+              <Link href="/settings" className="text-gray-500 hover:text-gray-700">
+                Settings
               </Link>
             </div>
             <div className="flex items-center space-x-4">
