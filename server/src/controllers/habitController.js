@@ -1,5 +1,6 @@
 // server/src/controllers/habitController.js
 import { Habit } from '../models/Habit.js';
+import mongoose from 'mongoose';
 
 // @desc    Create initial habits for user
 // @route   POST /api/habits/initialize
@@ -399,61 +400,88 @@ export const deleteCategory = async (req, res) => {
 };
 
 export const resetDailyHabits = async () => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
+  let session;
   try {
-    console.log('Starting habit reset process...');
-    
+    console.log('Starting daily habit reset process...');
+    session = await mongoose.startSession();
+    session.startTransaction();
+
+    // Find all habits
     const habits = await Habit.find({});
     console.log(`Found ${habits.length} habits to process`);
-    
-    // Get the current date at midnight
+
+    // Get current date at midnight
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
+    // Process each habit document
     for (const habit of habits) {
-      console.log(`Processing habit for user: ${habit.userId}`);
-      
-      // Reset all habits regardless of previous state
-      const updatedCategories = new Map();
-      
-      habit.categories.forEach((category, categoryId) => {
-        const updatedHabits = category.habits.map(h => ({
-          ...h,
-          completed: false,
-          completedAt: null
-        }));
+      try {
+        console.log(`Processing habits for user: ${habit.userId}`);
 
-        updatedCategories.set(categoryId, {
-          ...category,
-          habits: updatedHabits
+        // Create updated categories map
+        const updatedCategories = new Map();
+
+        // Process each category
+        habit.categories.forEach((category, categoryId) => {
+          // Reset all habits in the category
+          const updatedHabits = category.habits.map(h => ({
+            ...h.toObject(),
+            completed: false,
+            completedAt: null
+          }));
+
+          // Update the category with reset habits
+          updatedCategories.set(categoryId, {
+            ...category.toObject(),
+            habits: updatedHabits
+          });
         });
-      });
 
-      // Update habits and reset streak if necessary
-      await Habit.updateOne(
-        { _id: habit._id },
-        { 
-          $set: { 
-            categories: updatedCategories,
-            'streakData.lastUpdate': today,
-            'streakData.currentStreak': 0 // Reset streak at midnight
-          } 
-        },
-        { session }
-      );
-      console.log(`Successfully reset habits for user: ${habit.userId}`);
+        // Update the habit document
+        await Habit.findOneAndUpdate(
+          { _id: habit._id },
+          {
+            $set: {
+              categories: updatedCategories,
+              'streakData.lastUpdate': today,
+              'streakData.currentStreak': 0
+            }
+          },
+          { session }
+        );
+
+        console.log(`Successfully reset habits for user: ${habit.userId}`);
+      } catch (error) {
+        console.error(`Error processing habit ${habit._id}:`, error);
+        throw error; // Propagate error to trigger transaction rollback
+      }
     }
 
+    // Commit the transaction
     await session.commitTransaction();
-    console.log('Reset completed successfully');
-    return { success: true, message: 'Habits reset successfully' };
+    console.log('Daily habit reset completed successfully');
+    
+    return {
+      success: true,
+      message: 'All habits reset successfully',
+      timestamp: new Date(),
+      habitsProcessed: habits.length
+    };
+
   } catch (error) {
-    await session.abortTransaction();
-    console.error('Reset daily habits error:', error);
+    console.error('Error in resetDailyHabits:', error);
+    
+    // Rollback transaction if exists
+    if (session) {
+      await session.abortTransaction();
+    }
+    
     throw error;
   } finally {
-    session.endSession();
+    // End session if exists
+    if (session) {
+      session.endSession();
+    }
   }
 };
