@@ -4,7 +4,7 @@ import { resetDailyHabits } from '../controllers/habitController.js';
 
 export const initCronJobs = () => {
   // Run every 5 minutes for testing
-  cron.schedule('*/1 * * * *', async () => {
+  cron.schedule('0 0 * * *', async () => {
     console.log('Running daily habit reset...');
     try {
       const result = await resetDailyHabits();

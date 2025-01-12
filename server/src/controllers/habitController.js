@@ -95,14 +95,45 @@ export const getHabitHistory = async (req, res) => {
     // Create daily entries for the date range
     const start = new Date(startDate);
     const end = new Date(endDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
     const dailyEntries = [];
 
-    for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const currentDate = new Date(d);
+      const isInPast = currentDate < today;
+      const isToday = currentDate.getTime() === today.getTime();
+
+      // Create a deep copy of categories to avoid modifying the original
+      const categoriesCopy = new Map();
+      habits.categories.forEach((category, key) => {
+        const habitsCopy = category.habits.map(habit => {
+          // For past dates, mark all habits as completed
+          // For today, keep actual completion status
+          // For future dates, mark as uncompleted
+          const completed = isInPast ? true : 
+                          isToday ? habit.completed : 
+                          false;
+          
+          return {
+            ...habit.toObject(),
+            completed,
+            completedAt: completed ? currentDate : null
+          };
+        });
+
+        categoriesCopy.set(key, {
+          ...category.toObject(),
+          habits: habitsCopy
+        });
+      });
+
       dailyEntries.push({
-        date: new Date(d),
-        categories: habits.categories,
+        date: new Date(currentDate),
+        categories: Object.fromEntries(categoriesCopy),
         streakData: {
-          currentStreak: habits.streakData.currentStreak,
+          currentStreak: isInPast ? habits.streakData.longestStreak : habits.streakData.currentStreak,
           longestStreak: habits.streakData.longestStreak
         }
       });
@@ -377,61 +408,42 @@ export const resetDailyHabits = async () => {
     const habits = await Habit.find({});
     console.log(`Found ${habits.length} habits to process`);
     
+    // Get the current date at midnight
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Start of today
+    today.setHours(0, 0, 0, 0);
     
     for (const habit of habits) {
       console.log(`Processing habit for user: ${habit.userId}`);
       
-      let modified = false;
-      const updatedCategories = new Map(habit.categories);
+      // Reset all habits regardless of previous state
+      const updatedCategories = new Map();
+      
+      habit.categories.forEach((category, categoryId) => {
+        const updatedHabits = category.habits.map(h => ({
+          ...h,
+          completed: false,
+          completedAt: null
+        }));
 
-      // Process each category
-      for (const [categoryId, category] of updatedCategories.entries()) {
-        console.log(`Processing category: ${categoryId}`);
-        
-        // Reset today's habits
-        const updatedHabits = category.habits.map(h => {
-          const completionDate = h.completedAt ? new Date(h.completedAt) : null;
-          if (completionDate) {
-            completionDate.setHours(0, 0, 0, 0);
-          }
-          
-          // Only reset if completed today
-          if (h.completed && completionDate?.getTime() === today.getTime()) {
-            modified = true;
-            return {
-              ...h,
-              completed: false,
-              completedAt: null
-            };
-          }
-          return h;
-        });
-
-        // Update category with reset habits
         updatedCategories.set(categoryId, {
           ...category,
           habits: updatedHabits
         });
-      }
+      });
 
-      if (modified) {
-        console.log(`Updating habit document for user: ${habit.userId}`);
-        await Habit.updateOne(
-          { _id: habit._id },
-          { 
-            $set: { 
-              categories: updatedCategories,
-              'streakData.lastUpdate': today
-            } 
-          },
-          { session }
-        );
-        console.log(`Successfully reset habits for user: ${habit.userId}`);
-      } else {
-        console.log(`No changes needed for user: ${habit.userId}`);
-      }
+      // Update habits and reset streak if necessary
+      await Habit.updateOne(
+        { _id: habit._id },
+        { 
+          $set: { 
+            categories: updatedCategories,
+            'streakData.lastUpdate': today,
+            'streakData.currentStreak': 0 // Reset streak at midnight
+          } 
+        },
+        { session }
+      );
+      console.log(`Successfully reset habits for user: ${habit.userId}`);
     }
 
     await session.commitTransaction();
